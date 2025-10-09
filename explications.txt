@@ -1,0 +1,131 @@
+python -m venv venv // Ça va créer un dossier venv/ contenant une copie isolée de Python pour ne pas polluer tout le système
+
+.\venv\Scripts\activate // Pour se positionner dans l’environnement isolé.
+
+C:\Users\Ousmane_DIOP\Desktop\projet_reconnaisance_facial\SPRF\venv\Scripts\activate // Dans un autre terminal pour pouvoir installer et executer dlbib
+
+python setup.py install //Pour l'installer (prerequis CMake installé, Build Tools de Visual Studio (MSVC))
+
+pip freeze > requirements.txt //Il contiendra les versions exactes installées (face-recognition, opencv-python, dlib, etc.) pour partager le projet. ensuite, sur une autre machine (ou après une réinstallation), tu n’as qu’à faire : pip install -r requirements.txt
+
+👉 face-recognition = la librairie qui gère la détection et l’encodage des visages.
+👉 opencv-python (cv2) = pour charger, afficher et manipuler les images.
+👉 numpy → gère les tableaux de nombres (les encodages sont des vecteurs numpy).
+👉 pickle → transforme les objets Python (vecteurs encodés) en binaire pour les stocker dans MySQL.
+👉 os → gérer les chemins et fichiers (parcourir le dossier des images).
+👉 db_config → fichier séparé pour se connecter à MySQL.
+
+
+
+
+1. Architecture générale
+Le projet aura 3 couches principales :
+Collecte & Enregistrement (train_faces.py)
+Tu ajoutes les photos des employés/étudiants dans un dossier.
+On encode leurs visages avec face_recognition.face_encodings().
+On stocke les vecteurs d’encodage dans MySQL avec le nom de la personne.
+Reconnaissance (recognize.py)
+On capture une image (ou une frame de caméra).
+On détecte le visage → on calcule l’encodage.
+On compare avec la base MySQL → si proche d’un encodage existant, on identifie la personne.
+On peut aussi stocker un pointage (timestamp + user_id) dans une table attendance.
+
+
+
+3. Workflow du projet
+a) Enregistrer un utilisateur
+Ajouter sa photo dans images/connues/.
+Lancer train_faces.py.
+Le script lit l’image.
+Détecte le visage et calcule l’encodage.
+Stocke le nom + encodage dans MySQL.
+
+b) Reconnaissance
+Lancer recognize.py.
+Capture via webcam (ou lire une photo de images/inconnues/).
+Détecte les visages.
+Pour chaque visage → compare avec tous les encodages MySQL.
+Si correspondance → affiche le nom + enregistre le pointage dans attendance.
+Si inconnu → affiche "Inconnu".
+
+
+Structure du projet
+projet_reconnaissance_facial/
+│── venv/                       # environnement virtuel
+│── images/
+│   ├── connues/                # images des utilisateurs connus
+│   │   ├── ousmane.jpg
+│   │   ├── ami1.jpg
+│   └── inconnues/              # images à tester
+│       └── groupe.jpg
+│── train_faces.py               # encoder et enregistrer dans MySQL
+│── recognize.py                 # reconnaître en temps réel + enregistrer le pointage
+│── db_config.py                 # fichier config MySQL (host, user, password, db)
+
+
+
+🔄 Pipeline de reconnaissance faciale avec tes libs
+1️⃣ Capture de l’image
+opencv-python (cv2.VideoCapture(0)) → ouvre la webcam, prend une photo ou lit une vidéo.
+pillow (Image.open("image.jpg")) → ouvrir et manipuler les fichiers images (JPG, PNG).
+
+2️⃣ Prétraitement des images
+numpy → convertit l’image en tableau de pixels (matrice ndarray).
+Exemple : une image 640×480 RGB devient une matrice 480x640x3.
+
+3️⃣ Détection du visage
+dlib (via face-recognition) → trouve les positions des visages dans l’image.
+Exemple : face_recognition.face_locations(img) retourne les coordonnées [top, right, bottom, left] du visage.
+
+4️⃣ Encodage du visage
+dlib calcule un vecteur numérique de 128 dimensions qui représente ton visage.
+face-recognition simplifie ça avec :
+encodings = face_recognition.face_encodings(img)
+
+5️⃣ Comparaison et reconnaissance
+Tu compares l’encodage du visage détecté avec ta base de données.
+numpy est utilisé pour mesurer la distance entre vecteurs.
+Exemple :
+results = face_recognition.compare_faces([known_encoding], unknown_encoding)
+
+6️⃣ Affichage et interaction
+opencv-python → affiche la vidéo et dessine des rectangles + noms autour des visages (cv2.rectangle).
+colorama → colore les logs dans le terminal (vert = reconnu, rouge = inconnu).
+click → permet de lancer ton script en ligne de commande avec des arguments, ex :
+python recognize.py --image test.jpg
+
+🖼️ Schéma simplifié
+[ WebCam / Image ] 
+        │
+        ▼
+[ opencv / pillow ]  → Charger l’image
+        │
+        ▼
+[ numpy ]  → Transformer en matrice
+        │
+        ▼
+[ dlib + face-recognition ]  
+        - Détection du visage
+        - Encodage en vecteur (128D)
+        │
+        ▼
+[ numpy ]  → Comparaison des vecteurs
+        │
+        ▼
+[ Résultat ]  
+   ├── visage reconnu → nom affiché
+   └── inconnu → marquer comme "unknown"
+        │
+        ▼
+[ opencv ] → Afficher rectangle + texte
+[ colorama ] → Logs colorés dans terminal
+[ click ] → Interface en ligne de commande
+
+
+
+
+
+
+
+
+ajouter une barre de recherche par date de pointage

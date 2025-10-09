@@ -1,0 +1,222 @@
+{% extends "layout.html" %}
+{% block title %}Statistiques de présence{% endblock %}
+
+{% block content %}
+<style>
+  .chart-container {
+    position: relative;
+    width: 100%;
+    max-width: 800px; /* limite la largeur max */
+    margin: auto;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    padding: 15px;
+    overflow: hidden; /* empêche les débordements */
+  }
+
+  canvas {
+    width: 100% !important;
+    height: auto !important;
+    max-height: 350px !important; /* limite la hauteur des graphes */
+  }
+
+  .charts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 20px;
+    justify-content: center;
+  }
+</style>
+
+<div class="container">
+  <h2 class="mb-4">📊 Statistiques de présence</h2>
+
+  <!-- 🔽 Filtres -->
+  <div class="mb-4 d-flex flex-wrap align-items-center gap-3">
+    <!-- Sélecteur de période -->
+    <div>
+      <label for="periode" class="form-label">Période :</label>
+      <select id="periode" class="form-select d-inline-block w-auto">
+        <option value="jour">Aujourd'hui</option>
+        <option value="semaine" selected>Cette semaine</option>
+        <option value="mois">Ce mois-ci</option>
+      </select>
+    </div>
+
+    <!-- Sélecteur de service -->
+    <div>
+      <label for="service" class="form-label">Service :</label>
+      <select id="service" class="form-select d-inline-block w-auto">
+        <option value="">Tous les services</option>
+        {% for s in services %}
+          <option value="{{ s }}">{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    
+  <div class="mt-6 flex gap-4">
+    <button id="export-all" class="bg-green-600 text-black px-4 py-2 rounded hover:bg-green-700">
+      Exporter tous les services
+    </button>
+
+    <button id="export-selected" class="bg-blue-600 text-black px-4 py-2 rounded hover:bg-blue-700">
+      Exporter le service sélectionné
+    </button>
+  </div>
+  </div>
+
+
+
+  <!-- ✅ Conteneur des graphiques côte à côte -->
+  <div class="row">
+    <!-- Camembert -->
+    <div class="col-md-6 mb-4">
+      <div class="card h-100">
+        <div class="card-body text-center">
+          <h5 class="card-title">Répartition des statuts (%)</h5>
+          <canvas id="statusChart" style="max-width:100%; height:300px;"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Histogramme -->
+    <div class="col-md-6 mb-4">
+      <div class="card h-100">
+        <div class="card-body text-center">
+          <h5 class="card-title">Valeurs brutes (effectifs)</h5>
+          <canvas id="statusBarChart" style="max-width:100%; height:300px;"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Données initiales Flask -->
+<script id="stats-data" type="application/json">
+  {{ {
+    "a_l_heure": a_l_heure,
+    "retard": retard,
+    "absent": absent
+  } | tojson }}
+</script>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+  function renderCharts(statsData) {
+    if (window.statusChart instanceof Chart) window.statusChart.destroy();
+    if (window.statusBarChart instanceof Chart) window.statusBarChart.destroy();
+
+    const a_l_heure = statsData.a_l_heure || 0;
+    const retard = statsData.retard || 0;
+    const absent = statsData.absent || 0;
+
+    const total = a_l_heure + retard + absent;
+    const dataPercent = total > 0 ? [
+      (a_l_heure / total * 100).toFixed(1),
+      (retard / total * 100).toFixed(1),
+      (absent / total * 100).toFixed(1)
+    ] : [0, 0, 0];
+
+    const labels = ["À l'heure", "Retard", "Absent"];
+    const colors = [
+      'rgba(75, 192, 192, 0.7)',
+      'rgba(255, 206, 86, 0.7)',
+      'rgba(255, 99, 132, 0.7)'
+    ];
+
+    // Camembert
+    const ctx1 = document.getElementById('statusChart').getContext('2d');
+    window.statusChart = new Chart(ctx1, {
+      type: 'pie',
+      data: { labels, datasets: [{ data: dataPercent, backgroundColor: colors }] },
+      options: { plugins: { legend: { position: 'bottom' } } }
+    });
+
+    // Histogramme
+    const ctx2 = document.getElementById('statusBarChart').getContext('2d');
+    window.statusBarChart = new Chart(ctx2, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{ label: "Effectifs", data: [a_l_heure, retard, absent], backgroundColor: colors }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+      }
+    });
+  }
+
+  // Charger données initiales
+  const raw = document.getElementById('stats-data').textContent || '{}';
+  const statsData = JSON.parse(raw);
+  renderCharts(statsData);
+
+  // Rafraîchir quand on change période ou service
+  async function refreshStats() {
+    const periode = document.getElementById('periode').value;
+    const service = document.getElementById('service').value;
+    const res = await fetch(`/api/statistiques?periode=${periode}&service=${service}`);
+    const data = await res.json();
+    renderCharts(data);
+  }
+
+  document.getElementById('periode').addEventListener('change', refreshStats);
+  document.getElementById('service').addEventListener('change', refreshStats);
+</script>
+
+<script>
+  async function exportPDF(service = "tous", periode = "jour") {
+    const chart1 = document.getElementById("statusChart");
+    const chart2 = document.getElementById("statusBarChart");
+
+    // Convertir les deux canvas en images base64
+    const img1 = chart1.toDataURL("image/png");
+    const img2 = chart2.toDataURL("image/png");
+
+    // Créer un objet formData à envoyer
+    const formData = new FormData();
+    formData.append("service", service);
+    formData.append("periode", periode);
+    formData.append("chart1", img1);
+    formData.append("chart2", img2);
+
+    const res = await fetch("/export-statistiques", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!res.ok) {
+      alert("Erreur lors de la génération du PDF");
+      return;
+    }
+
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `statistiques_${service}_${periode}.pdf`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  }
+
+  // Boutons
+  document.getElementById("export-selected").addEventListener("click", () => {
+    const service = document.getElementById("service").value || "tous";
+    const periode = document.getElementById("periode").value || "jour";
+    exportPDF(service, periode);
+  });
+
+  document.getElementById("export-all").addEventListener("click", () => {
+    exportPDF("tous", "mois");
+  });
+</script>
+
+
+{% endblock %}

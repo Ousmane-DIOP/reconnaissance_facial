@@ -1,0 +1,12 @@
+python -m venv venv // Ça va créer un dossier venv/ contenant une copie isolée de Python pour ne pas polluer tout le système
+
+.\venv\Scripts\activate // Pour se positionner dans l’environnement isolé.
+
+C:\Users\Ousmane_DIOP\Desktop\projet_reconnaisance_facial\SPRF\venv\Scripts\activate // Dans un autre terminal pour pouvoir installer et executer dlbib
+
+python setup.py install //Pour l'installer (prerequis CMake installé, Build Tools de Visual Studio (MSVC))
+
+pip freeze > requirements.txt //Il contiendra les versions exactes installées (face-recognition, opencv-python, dlib, etc.) pour partager le projet. ensuite, sur une autre machine (ou après une réinstallation), tu n’as qu’à faire : pip install -r requirements.txt
+
+👉 face-recognition = la librairie qui gère la détection et l’encodage des visages.
+👉 opencv-python (cv2) = pour charger, afficher et manipuler les images.

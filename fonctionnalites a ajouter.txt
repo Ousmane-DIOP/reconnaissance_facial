@@ -1,0 +1,23 @@
+3. Notifications automatiques
+    Envoi d’email ou SMS si un employé est absent ou en retard.
+    Avertissement si un service dépasse un seuil d’absentéisme.
+    👉 Utile pour le suivi automatique.
+
+4. Exportation avancée
+    Génération automatique d’un rapport hebdomadaire envoyé par email aux managers.
+    Format CSV pour intégration avec d’autres systèmes RH.
+
+5. Gestion des utilisateurs avancée
+    Ajouter la photo de l’utilisateur dans la base pour affichage dans le dashboard.
+    Ajouter un champ poste/fonction en plus du service.
+    Pouvoir désactiver un utilisateur (ex : départ de l’entreprise) sans le supprimer.
+
+6. Reconnaissance faciale améliorée
+    Détection de plusieurs personnes en même temps (ex : groupe entrant).
+    Ajout de seuil de tolérance configurable (éviter les faux positifs).
+    Historique des tentatives échouées (visage non reconnu).
+
+7. Sécurité et audit
+    Journaliser toutes les actions admin (connexion, ajout/suppression utilisateur, export).
+    Double authentification (2FA) pour les administrateurs.
+    Sauvegarde automatique de la base de données.
