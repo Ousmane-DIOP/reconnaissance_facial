@@ -25,7 +25,8 @@ SON_INCONNU = "./sound_error.wav"
 LOG_LEVEL = logging.INFO
 
 CAMERAS = [
-    "rtsp://admin:Hymd2%4015@192.168.1.207:554/Streaming/Channels/101"
+    "rtsp://admin:Hymd2%4025@192.168.1.207:554/Streaming/Channels/101",
+    "rtsp://admin:Hymd2%4025@192.168.1.208:554/Streaming/Channels/101",
 ]
 
 # -------------------------
@@ -38,15 +39,15 @@ logging.basicConfig(level=LOG_LEVEL, format="[%(asctime)s] [%(threadName)s] %(le
 # -------------------------
 engine = pyttsx3.init()
 engine.setProperty('rate', 140)
-engine.setProperty('volume', 3.0)
-engine.setProperty('voice', 'com.apple.speech.synthesis.voice.thomas' if 'mac' in pyttsx3.drivers.SAPI5Driver.__name__ else None)
+engine.setProperty('volume', 1.0)
+# engine.setProperty('voice', 'com.apple.speech.synthesis.voice.thomas' if 'mac' in pyttsx3.drivers.SAPI5Driver.__name__ else None)
 
-def parler(texte):
-    try:
-        engine.say(texte)
-        engine.runAndWait()
-    except Exception as e:
-        logging.warning("Erreur TTS: %s", e)
+# def parler(texte):
+#     try:
+#         engine.say(texte)
+#         engine.runAndWait()
+#     except Exception as e:
+#         logging.warning("Erreur TTS: %s", e)
 
 # -------------------------
 # JOUER UN SON
@@ -144,11 +145,11 @@ def traiter_camera(rtsp_url, nom_camera):
                                 if poster_pointage(id_user):
                                     last_post_time[id_user] = now
                                     jouer_son(SON_RECONNU)
-                                    parler(f"Bienvenue {prenom_user} {nom_user}, service {service_user}")
+                                    # parler(f"Bienvenue {prenom_user} {nom_user}, service {service_user}")
                                     logging.info(f"[{nom_camera}] Pointage {nom_affiche}")
                         else:
                             jouer_son(SON_INCONNU)
-                            parler("Visage non reconnu")
+                            # parler("Visage non reconnu")
 
                     cv2.rectangle(frame_bgr, (left, top), (right, bottom), (0,255,0), 2)
                     cv2.putText(frame_bgr, nom_affiche, (left, top-10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,0,0), 2)
