@@ -1,14 +1,58 @@
 {% extends "layout.html" %}
-{% block title %}Tableau de bord – Pointage{% endblock %}
+{% block title %}Tableau de bord - Pointage{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-  <h2 class="mb-4">📊 Tableau de bord – Pointage</h2>
+  <h2 class="mb-4">📊 Tableau de bord - Pointage</h2>
 
-  <!-- ✅ Formulaire d'exportation -->
-  <h4 class="mt-5">Exporter les pointages</h4>
-  <form method="POST" action="{{ url_for('export_records') }}" class="row g-3">
+  <!-- 🕓 Date actuelle -->
+  <div class="alert alert-info py-2">
+    <strong>Date actuelle :</strong> {{ date_pointage }}
+  </div>
 
+  <!-- ✅ FORMULAIRE DE RECHERCHE / FILTRES -->
+  <form method="get" action="{{ url_for('dashboard') }}" class="row g-3 mb-4">
+    <!-- Filtre par date -->
+    <div class="col-md-2">
+      <label class="form-label">Date</label>
+      <input type="date" name="date" class="form-control"
+             value="{{ filtres.date or '' }}">
+    </div>
+
+    <!-- Filtre par service -->
+    <div class="col-md-3">
+      <label class="form-label">Service</label>
+      <select name="service" class="form-select">
+        <option value="">-- Tous les services --</option>
+        {% for s in services %}
+          <option value="{{ s }}" {% if filtres.service == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Filtre par statut -->
+    <div class="col-md-3">
+      <label class="form-label">Statut</label>
+      <select name="statut" class="form-select">
+        <option value="">-- Tous les statuts --</option>
+        <option value="a_l_heure" {% if filtres.statut == "a_l_heure" %}selected{% endif %}>À l'heure</option>
+        <option value="retard" {% if filtres.statut == "retard" %}selected{% endif %}>En retard</option>
+        <option value="absent" {% if filtres.statut == "absent" %}selected{% endif %}>Absent</option>
+      </select>
+    </div>
+
+    <!-- Boutons -->
+    <div class="col-md-4 d-flex align-items-end gap-2">
+      <button type="submit" class="btn btn-primary w-50">🔍 Rechercher</button>
+      <a href="{{ url_for('dashboard') }}" class="btn btn-secondary w-50">📅 Aujourd’hui</a>
+    </div>
+  </form>
+
+  <hr class="my-4">
+
+  <!-- ✅ FORMULAIRE D'EXPORTATION -->
+  <h4 class="mb-3">📤 Exporter les pointages</h4>
+  <form method="POST" action="{{ url_for('export_records') }}" class="row g-3 mb-5">
     <!-- Type d’export -->
     <div class="col-md-3">
       <label for="export_type" class="form-label">Type d’exportation</label>
@@ -20,90 +64,53 @@
 
     <!-- Sélection du mois -->
     <div class="col-md-3" id="month_container" style="display:none;">
-      <label for="mois" class="form-label">Choisir un mois</label>
+      <label for="mois" class="form-label">Mois</label>
       <select name="mois" id="mois" class="form-select">
         <option value="">-- Sélectionner --</option>
         {% for m in range(1,13) %}
-        <option value="{{ m }}">{{ ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"][m-1] }}</option>
+          <option value="{{ m }}">{{ ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"][m-1] }}</option>
         {% endfor %}
       </select>
     </div>
 
-    <!-- Filtre par service -->
+    <!-- Service -->
     <div class="col-md-3">
       <label for="service" class="form-label">Service (optionnel)</label>
       <select name="service" id="service" class="form-select">
         <option value="">-- Tous les services --</option>
         {% for s in services %}
-        <option value="{{ s }}">{{ s }}</option>
+          <option value="{{ s }}" {% if filtres.service == s %}selected{% endif %}>{{ s }}</option>
         {% endfor %}
       </select>
     </div>
 
-    <!-- Filtre par employé -->
+    <!-- Employé -->
     <div class="col-md-3">
       <label for="employe" class="form-label">Employé (optionnel)</label>
       <select name="employe" id="employe" class="form-select">
         <option value="">-- Tous les employés --</option>
         {% for e in employes %}
-        <option value="{{ e.id }}">{{ e.prenom }} {{ e.nom }}</option>
+          <option value="{{ e.id }}">{{ e.prenom }} {{ e.nom }}</option>
         {% endfor %}
       </select>
     </div>
 
-    <!-- Format d'export -->
+    <!-- Format -->
     <div class="col-md-3">
       <label for="format" class="form-label">Format</label>
       <select name="format" id="format" class="form-select" required>
-        <option value="excel">Excel</option>
-        <option value="pdf">PDF</option>
+        <option value="excel">Excel (.xlsx)</option>
+        <option value="pdf">PDF (.pdf)</option>
       </select>
     </div>
 
+    <!-- Bouton -->
     <div class="col-12">
-      <button type="submit" class="btn btn-success w-100">Exporter</button>
+      <button type="submit" class="btn btn-success w-100">💾 Exporter</button>
     </div>
   </form>
 
-
-  <!-- ✅ Formulaire de recherche combinée -->
-  <form method="get" action="{{ url_for('dashboard') }}" class="row g-3 mb-4 mt-5">
-    <!-- Filtre par date -->
-    <div class="col-md-2">
-      <input type="date" name="date" class="form-control"
-            value="{{ request.args.get('date','') }}">
-    </div>
-
-    <!-- Filtre par service -->
-    <div class="col-md-3">
-      <select name="service" class="form-select">
-        <option value="">-- Tous les services --</option>
-        {% for s in services %}
-        <option value="{{ s }}" {% if request.args.get('service') == s %}selected{% endif %}>{{ s }}</option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <!-- Filtre par statut -->
-    <div class="col-md-3">
-      <select name="statut" class="form-select">
-        <option value="">-- Tous les statuts --</option>
-        <option value="a_l_heure" {% if request.args.get('statut') == "a_l_heure" %}selected{% endif %}>À l'heure</option>
-        <option value="retard" {% if request.args.get('statut') == "retard" %}selected{% endif %}>En retard</option>
-        <option value="absent" {% if request.args.get('statut') == "absent" %}selected{% endif %}>Absent</option>
-      </select>
-    </div>
-
-    <!-- Boutons -->
-    <div class="col-md-3">
-      <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Aujourd'hui</a>
-      <button type="submit" class="btn btn-primary w-70">🔍 Rechercher</button>
-    </div>
-  </form>
-
-
-
-  <!-- ✅ Classement -->
+  <!-- ✅ TABLEAU DES POINTAGES -->
   <div class="table-responsive">
     <table class="table table-striped table-bordered align-middle">
       <thead class="table-dark">
@@ -120,29 +127,29 @@
       <tbody>
         {% if utilisateurs %}
           {% for u in utilisateurs %}
-          <tr>
-            <td>{{ u.prenom }}</td>
-            <td>{{ u.nom }}</td>
-            <td>{{ u.service }}</td>
-            <td>{{ u.date_pointage or '-' }}</td>
-            <td>{{ u.heure_arrivee or '-' }}</td>
-            <td>{{ u.heure_sortie or '-' }}</td>
-            <td>
-              {% if u.statut == "a_l_heure" %}
-                <span class="badge bg-success">À l'heure</span>
-              {% elif u.statut == "retard" %}
-                <span class="badge bg-warning text-dark">Retard</span>
-              {% elif u.statut == "absent" %}
-                <span class="badge bg-danger">Absent</span>
-              {% else %}
-                <span class="badge bg-secondary">-</span>
-              {% endif %}
-            </td>
-          </tr>
+            <tr>
+              <td>{{ u.prenom }}</td>
+              <td>{{ u.nom }}</td>
+              <td>{{ u.service }}</td>
+              <td>{{ u.date_pointage or '-' }}</td>
+              <td>{{ u.heure_arrivee or '-' }}</td>
+              <td>{{ u.heure_sortie or '-' }}</td>
+              <td>
+                {% if u.statut == "a_l_heure" %}
+                  <span class="badge bg-success">À l'heure</span>
+                {% elif u.statut == "retard" %}
+                  <span class="badge bg-warning text-dark">Retard</span>
+                {% elif u.statut == "absent" %}
+                  <span class="badge bg-danger">Absent</span>
+                {% else %}
+                  <span class="badge bg-secondary">-</span>
+                {% endif %}
+              </td>
+            </tr>
           {% endfor %}
         {% else %}
           <tr>
-            <td colspan="7" class="text-center text-muted">Aucun pointage trouvé</td>
+            <td colspan="7" class="text-center text-muted py-4">Aucun pointage trouvé</td>
           </tr>
         {% endif %}
       </tbody>
@@ -150,14 +157,14 @@
   </div>
 
   <!-- ✅ Derniers pointages temps réel -->
-  <h4 class="mt-5">Derniers pointages (temps réel)</h4>
+  <h4 class="mt-5">🕒 Derniers pointages (temps réel)</h4>
   <ul id="liste-pointages" class="list-group"></ul>
 </div>
 
 <!-- ✅ Socket.IO -->
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <script>
-  var socket = io();
+  const socket = io();
 
   socket.on("nouveau_pointage", function(data) {
     let ul = document.getElementById("liste-pointages");
@@ -169,25 +176,21 @@
       dateStr += " à " + data.heure_arrivee;
     }
 
-    let nomAffiche = "";
-    if (data.prenom && data.nom) {
-      nomAffiche = `${data.prenom} ${data.nom} (${data.service || "N/A"})`;
-    } else {
-      nomAffiche = "Utilisateur #" + data.id_utilisateur;
-    }
+    let nomAffiche = data.prenom && data.nom
+      ? `${data.prenom} ${data.nom} (${data.service || "N/A"})`
+      : "Utilisateur #" + data.id_utilisateur;
 
     li.innerHTML = `<strong>${nomAffiche}</strong> a pointé <em>${dateStr}</em>`;
     ul.prepend(li);
 
-    // ✅ Limiter à 20 derniers
     if (ul.children.length > 20) {
       ul.removeChild(ul.lastChild);
     }
   });
 
-  // ✅ Afficher/cacher le choix du mois
+  // ✅ Afficher/cacher la sélection de mois
   function toggleMonthInput() {
-    let type = document.getElementById("export_type").value;
+    const type = document.getElementById("export_type").value;
     document.getElementById("month_container").style.display = (type === "month") ? "block" : "none";
   }
 </script>

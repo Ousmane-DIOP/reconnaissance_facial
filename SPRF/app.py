@@ -1,7 +1,8 @@
 from flask import Flask, flash, render_template, request, redirect, url_for, session, jsonify, send_file
 from flask_socketio import SocketIO, emit
 from db_config import obtenir_connexion
-from datetime import datetime, time, timedelta
+import time
+from datetime import datetime
 import bcrypt
 import pandas as pd
 from io import BytesIO
@@ -12,13 +13,34 @@ from openpyxl.styles import Alignment
 from reportlab.lib.utils import ImageReader
 import base64
 import sys
+import subprocess
+import os
+import psutil # Pour vérifier si le script de reconnaissance est déjà en cours d'exécution
+from dotenv import load_dotenv
+import threading
+import mysql.connector
+import face_recognition
+import pickle
+import cv2
 
+UPLOAD_FOLDER = "static/uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = "super_secret_key"  # ⚠️ à changer en production
 socketio = SocketIO(app)
 
+recognize_process = None
 
+connexion = obtenir_connexion()
+if connexion:
+    print("✅ Connexion réussie à la base de données.")
+else:
+    print("❌ Impossible de se connecter à la base de données.")
+
+    
 # -------------------------------
 # AUTHENTIFICATION ADMIN
 # -------------------------------
@@ -115,60 +137,84 @@ def api_add_user():
 # -------------------------------
 @app.route("/")
 def dashboard():
+    # 🔹 Récupération des filtres dans l'URL
     date_str = request.args.get("date")
     service = request.args.get("service")
     statut = request.args.get("statut")
 
-    connexion = obtenir_connexion()
-    curseur = connexion.cursor(dictionary=True)
+    try:
+        connexion = obtenir_connexion()
+        curseur = connexion.cursor(dictionary=True)
 
-    query = """
-        SELECT u.prenom, u.nom, u.service, p.date_pointage, p.heure_arrivee, p.heure_sortie, p.statut
-        FROM utilisateurs u
-        LEFT JOIN pointages p ON u.id = p.id_utilisateur
-        WHERE 1=1
-    """
-    params = []
+        # 🔹 Construction dynamique de la requête principale
+        query = """
+            SELECT 
+                u.prenom, 
+                u.nom, 
+                u.service, 
+                p.date_pointage, 
+                p.heure_arrivee, 
+                p.heure_sortie, 
+                p.statut
+            FROM utilisateurs u
+            LEFT JOIN pointages p ON u.id = p.id_utilisateur
+            WHERE 1=1
+        """
+        params = []
 
-    # 🔹 Filtrer par date
-    if date_str:
-        query += " AND DATE(p.date_pointage) = %s"
-        params.append(date_str)
-    else:
-        query += " AND DATE(p.date_pointage) = CURDATE()"
+        # 🗓️ Filtre par date (ou date du jour par défaut)
+        if date_str:
+            query += " AND DATE(p.date_pointage) = %s"
+            params.append(date_str)
+        else:
+            query += " AND DATE(p.date_pointage) = CURDATE()"
 
-    # 🔹 Filtrer par service
-    if service:
-        query += " AND u.service = %s"
-        params.append(service)
+        # 🧩 Filtre par service
+        if service:
+            query += " AND u.service = %s"
+            params.append(service)
 
-    # 🔹 Filtrer par statut
-    if statut:
-        query += " AND p.statut = %s"
-        params.append(statut)
+        # 🚦 Filtre par statut
+        if statut:
+            query += " AND p.statut = %s"
+            params.append(statut)
 
-    query += " ORDER BY p.date_pointage DESC, p.heure_arrivee ASC"
+        # 🔹 Tri : du plus récent au plus ancien
+        query += " ORDER BY p.date_pointage DESC, p.heure_arrivee ASC"
 
-    curseur.execute(query, params)
-    utilisateurs = curseur.fetchall()
+        # 🔹 Exécution
+        curseur.execute(query, params)
+        utilisateurs = curseur.fetchall()
 
-    # 🔹 Liste distincte des services
-    curseur.execute("SELECT DISTINCT service FROM utilisateurs ORDER BY service")
-    services = [row["service"] for row in curseur.fetchall()]
+        # 🔹 Liste des services (pour le menu déroulant)
+        curseur.execute("SELECT DISTINCT service FROM utilisateurs ORDER BY service")
+        services = [row["service"] for row in curseur.fetchall()]
 
-    # 🔹 Liste des employés
-    curseur.execute("SELECT id, prenom, nom FROM utilisateurs ORDER BY prenom, nom")
-    employes = curseur.fetchall()
+        # 🔹 Liste des employés (utile pour d’autres modules)
+        curseur.execute("SELECT id, prenom, nom FROM utilisateurs ORDER BY prenom, nom")
+        employes = curseur.fetchall()
 
-    curseur.close()
-    connexion.close()
+    except mysql.connector.Error as err:
+        flash(f"Erreur de base de données : {err}", "error")
+        utilisateurs, services, employes = [], [], []
 
+    finally:
+        if 'curseur' in locals():
+            curseur.close()
+        if 'connexion' in locals() and connexion.is_connected():
+            connexion.close()
+
+    # 🕓 Date actuelle formatée
+    date_actuelle = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # 🔹 Rendu du tableau de bord
     return render_template(
         "admin_dashboard.html",
         utilisateurs=utilisateurs,
-        date_pointage=datetime.now(),
         services=services,
-        employes=employes
+        employes=employes,
+        date_pointage=date_actuelle,
+        filtres={"date": date_str, "service": service, "statut": statut}
     )
 
 
@@ -373,7 +419,7 @@ def api_pointage():
     if not id_utilisateur:
         return {"status": "error", "message": "id_utilisateur manquant"}, 400
 
-    maintenant = datetime.now()
+    maintenant = time.now()
     heure_actuelle = maintenant.time()
     date_aujourdhui = maintenant.date()
 
@@ -440,7 +486,7 @@ def api_pointages():
         SELECT p.*, u.nom 
         FROM pointages p
         JOIN utilisateurs u ON u.id = p.id_utilisateur
-        ORDER BY p.date_pointage DESC, p.heure_arrivee DESC
+        ORDER BY p.date_pointage DES C, p.heure_arrivee DESC
         LIMIT 20
     """)
     data = cur.fetchall()
@@ -606,8 +652,107 @@ def api_notifier():
     return {"status": "ok"}
 
 
+@app.route("/ajouter_personnel", methods=["GET", "POST"])
+def ajouter_personnel():
+    if request.method == "POST":
+        prenom = request.form.get("prenom")
+        nom = request.form.get("nom")
+        service = request.form.get("service")
+        photo = request.files.get("photo")
+
+        if not (prenom and nom and service and photo):
+            flash("⚠️ Tous les champs sont obligatoires.", "danger")
+            return redirect(url_for("ajouter_personnel"))
+
+        # 🔹 Enregistrer temporairement la photo
+        nom_fichier = f"{prenom}_{nom}_{service}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
+        chemin_fichier = os.path.join(UPLOAD_FOLDER, nom_fichier)
+        photo.save(chemin_fichier)
+
+        try:
+            # 🔹 Charger l’image et détecter le visage
+            image = face_recognition.load_image_file(chemin_fichier)
+            encodages = face_recognition.face_encodings(image)
+
+            if len(encodages) == 0:
+                flash("❌ Aucun visage détecté sur la photo. Réessayez avec une image plus claire.", "danger")
+                os.remove(chemin_fichier)
+                return redirect(url_for("ajouter_personnel"))
+
+            encodage_binaire = pickle.dumps(encodages[0])
+
+            # 🔹 Vérifier si l’utilisateur existe déjà
+            connexion = obtenir_connexion()
+            curseur = connexion.cursor(dictionary=True)
+            curseur.execute(
+                "SELECT id FROM utilisateurs WHERE prenom = %s AND nom = %s AND service = %s",
+                (prenom, nom, service)
+            )
+            existe = curseur.fetchone()
+
+            if existe:
+                # Mettre à jour l’encodage si déjà présent
+                curseur.execute(
+                    "UPDATE utilisateurs SET encodage = %s WHERE id = %s",
+                    (encodage_binaire, existe["id"])
+                )
+                flash(f"✅ Encodage mis à jour pour {prenom} {nom} ({service}).", "info")
+            else:
+                # Nouvelle insertion
+                curseur.execute(
+                    "INSERT INTO utilisateurs (prenom, nom, service, encodage) VALUES (%s, %s, %s, %s)",
+                    (prenom, nom, service, encodage_binaire)
+                )
+                flash(f"✅ {prenom} {nom} ajouté avec succès.", "success")
+
+            connexion.commit()
+            curseur.close()
+            connexion.close()
+
+        except Exception as e:
+            flash(f"❌ Erreur lors du traitement de l'image : {e}", "danger")
+
+        return redirect(url_for("ajouter_personnel"))
+
+    return render_template("ajouter_personnel.html")
+
+
+# -----------------------------------------------------------
+# LANCEMENT AUTOMATIQUE DE recognize.py
+# -----------------------------------------------------------
+recognize_process = None
+
+def lancer_reconnaissance():
+    """Lance recognize.py en arrière-plan"""
+    global recognize_process
+    chemin_script = os.path.join(os.path.dirname(__file__), "recognize.py")
+
+    if recognize_process is None or recognize_process.poll() is not None:
+        print("🚀 Lancement de recognize.py...")
+        recognize_process = subprocess.Popen([sys.executable, chemin_script])
+        print("✅ recognize.py lancé en arrière-plan.")
+    else:
+        print("ℹ️ recognize.py est déjà en cours d’exécution.")
+
+def surveiller_reconnaissance():
+    """Surveille en continu si recognize.py tourne toujours"""
+    global recognize_process
+    while True:
+        time.sleep(10)
+        if recognize_process is None:
+            lancer_reconnaissance()
+        elif recognize_process.poll() is not None:  # poll() != None => processus terminé
+            print("⚠️ recognize.py s’est arrêté ! Relancement automatique...")
+            lancer_reconnaissance()
+
+# Démarre la surveillance dans un thread séparé
+threading.Thread(target=surveiller_reconnaissance, daemon=True).start()
+
 # -------------------------------
 # MAIN
 # -------------------------------
 if __name__ == "__main__":
-    socketio.run(app, debug=True)
+    lancer_reconnaissance()
+    socketio.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=False)
+
+

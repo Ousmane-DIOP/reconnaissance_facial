@@ -21,3 +21,18 @@
     Journaliser toutes les actions admin (connexion, ajout/suppression utilisateur, export).
     Double authentification (2FA) pour les administrateurs.
     Sauvegarde automatique de la base de données.
+
+
+    
+
+
+Souhaites-tu que je te montre ensuite comment intégrer ce statut dans ton tableau de bord admin (par exemple un mini tableau en haut à droite avec un point vert/rouge par caméra) ?
+
+
+
+
+
+
+
+
+
